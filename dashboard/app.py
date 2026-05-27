@@ -34,15 +34,17 @@ df                        = load_data()
 model, scaler, CLUSTER_NAMES = load_models()
 
 SEGMENT_ORDER = [
-    "Budget Residential Buyers",
-    "Mainstream Residential Buyers",
-    "Premium Investors",
+    'First-Time Buyers',
+    'Corporate Buyers',
+    'Global Investors',
+    'Luxury Investors',
 ]
 
 SEGMENT_COLORS = {
-    "Budget Residential Buyers"     : "#3498db",
-    "Mainstream Residential Buyers" : "#2ecc71",
-    "Premium Investors"             : "#e74c3c",
+    'First-Time Buyers' : '#3498db',
+    'Corporate Buyers'  : '#2ecc71',
+    'Global Investors'  : '#f39c12',
+    'Luxury Investors'  : '#e74c3c',
 }
 
 # ─────────────────────────────────────────────
@@ -549,35 +551,43 @@ with tab5:
 st.markdown("---")
 st.subheader("📋 Buyer Persona Reference")
 
-p1, p2, p3 = st.columns(3)
+p1, p2, p3, p4 = st.columns(4)
 
 with p1:
     st.info(
-        "🏠 **Budget Residential Buyers**\n\n"
+        "🏠 **First-Time Buyers**\n\n"
         "• Lower property value\n"
-        "• Smaller floor area\n"
+        "• Younger buyers\n"
         "• High loan dependency\n"
-        "• Cost-sensitive, primarily Home buyers\n"
-        "• Mostly via Website channel"
+        "• Low satisfaction — needs support\n"
+        "• Home purchase focused"
     )
 with p2:
     st.info(
-        "🏢 **Mainstream Residential Buyers**\n\n"
+        "🏢 **Corporate Buyers**\n\n"
         "• Mid-range properties\n"
-        "• Balanced Apartment/Office mix\n"
-        "• Average investment behaviour\n"
-        "• Mix of Home & Investment purpose\n"
+        "• High satisfaction score\n"
+        "• Companies buying multiple units\n"
+        "• Mixed Home/Investment purpose\n"
         "• Agency channel effective"
     )
 with p3:
     st.info(
-        "💎 **Premium Investors**\n\n"
-        "• High-value properties\n"
+        "🌍 **Global Investors**\n\n"
+        "• Upper mid-range properties\n"
+        "• International buyers\n"
+        "• Investment focused\n"
+        "• Diverse geographic origin\n"
+        "• Low loan dependency"
+    )
+with p4:
+    st.info(
+        "💎 **Luxury Investors**\n\n"
+        "• Highest property value\n"
         "• Large floor areas\n"
         "• High investment score\n"
-        "• Low loan dependency\n"
-        "• Diverse geographic origin\n"
-        "• High satisfaction — strong referral potential"
+        "• No loan dependency\n"
+        "• Premium portfolio buyers"
     )
 
 # ─────────────────────────────────────────────
