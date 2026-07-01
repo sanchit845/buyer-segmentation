@@ -1,3 +1,6 @@
+import os
+from datetime import datetime
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -13,6 +16,7 @@ st.set_page_config(
     page_title="Real Estate Buyer Intelligence",
     page_icon="🏠",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────
@@ -76,6 +80,18 @@ st.markdown("""
 
 st.title("🏠 Real Estate Buyer Intelligence Dashboard")
 st.caption("Machine Learning Based Buyer Segmentation & Investment Profiling — Parcl Co.")
+
+# Data freshness: show when the source CSV was last modified
+try:
+    _csv_path = os.path.join(os.path.dirname(__file__), "..", "data", "processed", "final_segmented_dataset.csv")
+    _mtime = datetime.fromtimestamp(os.path.getmtime(_csv_path))
+    st.caption(
+        f"Data snapshot: {_mtime:%Y-%m-%d %H:%M}  ·  "
+        f"{len(df):,} buyers  ·  4-segment KMeans model"
+    )
+except OSError:
+    pass  # CSV not reachable from CWD — skip silently
+
 st.markdown("---")
 
 # ─────────────────────────────────────────────
@@ -88,24 +104,28 @@ st.sidebar.markdown("---")
 selected_segment = st.sidebar.selectbox(
     "Buyer Segment",
     ["All"] + SEGMENT_ORDER,
+    help="Filter to one of the 4 ML-derived buyer segments.",
 )
 
 country_options = sorted(df["country"].dropna().unique().tolist())
 selected_country = st.sidebar.selectbox(
     "Country",
     ["All"] + country_options,
+    help="Filter by buyer's country of residence.",
 )
 
 purpose_options = sorted(df["acquisition_purpose"].dropna().unique().tolist())
 selected_purpose = st.sidebar.selectbox(
     "Acquisition Purpose",
     ["All"] + purpose_options,
+    help="Home (residential) vs Investment (rental / portfolio).",
 )
 
 client_type_options = sorted(df["client_type"].dropna().unique().tolist())
 selected_client_type = st.sidebar.selectbox(
     "Client Type",
     ["All"] + client_type_options,
+    help="Individual buyers vs Companies / corporate accounts.",
 )
 
 st.sidebar.markdown("---")
@@ -142,18 +162,42 @@ if filtered_df.empty:
 # ─────────────────────────────────────────────
 
 if not _filter_is_empty:
+    def _delta(curr, base):
+        """Format a +X.X% / -X.X% delta vs the un-filtered dataset, or None when unchanged."""
+        if base == 0:
+            return None
+        pct = (curr / base - 1) * 100
+        # When delta is effectively zero, return None to hide the indicator
+        return None if abs(pct) < 0.05 else f"{pct:+.1f}%"
+
+    base_n      = len(df)
+    base_age    = df["age"].mean()
+    base_price  = df["sale_price"].mean()
+    base_invest = df["investment_score"].mean()
+    base_sat    = df["satisfaction_score"].mean()
+
     kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
 
     with kpi1:
-        st.metric("👥 Total Buyers", f"{len(filtered_df):,}")
+        st.metric("👥 Total Buyers",
+                  f"{len(filtered_df):,}",
+                  delta=_delta(len(filtered_df), base_n))
     with kpi2:
-        st.metric("📈 Average Age", f"{filtered_df['age'].mean():.1f} yrs")
+        st.metric("📈 Average Age",
+                  f"{filtered_df['age'].mean():.1f} yrs",
+                  delta=_delta(filtered_df['age'].mean(), base_age))
     with kpi3:
-        st.metric("🏠 Avg Sale Price", f"${filtered_df['sale_price'].mean():,.0f}")
+        st.metric("🏠 Avg Sale Price",
+                  f"${filtered_df['sale_price'].mean():,.0f}",
+                  delta=_delta(filtered_df['sale_price'].mean(), base_price))
     with kpi4:
-        st.metric("💡 Avg Invest. Score", f"{filtered_df['investment_score'].mean():.1f}")
+        st.metric("💡 Avg Invest. Score",
+                  f"{filtered_df['investment_score'].mean():.1f}",
+                  delta=_delta(filtered_df['investment_score'].mean(), base_invest))
     with kpi5:
-        st.metric("⭐ Avg Satisfaction", f"{filtered_df['satisfaction_score'].mean():.2f}/5")
+        st.metric("⭐ Avg Satisfaction",
+                  f"{filtered_df['satisfaction_score'].mean():.2f}/5",
+                  delta=_delta(filtered_df['satisfaction_score'].mean(), base_sat))
 
 st.markdown("---")
 
@@ -258,17 +302,19 @@ with tab2:
         st.plotly_chart(fig_box, use_container_width=True)
 
     with c2:
-        # Investment score vs age scatter
+        # Investment score vs satisfaction — these are the two axes that
+        # actually discriminate the 4 segments (age has near-zero spread:
+        # 55.1 → 57.6 across segments, so an age-based scatter is uninformative)
         fig_sc = px.scatter(
             filtered_df,
-            x="age", y="investment_score",
+            x="satisfaction_score", y="investment_score",
             color="Buyer_Segment",
             color_discrete_map=SEGMENT_COLORS,
             category_orders={"Buyer_Segment": SEGMENT_ORDER},
             size="sale_price",
             opacity=0.6,
-            title="Investment Score vs Age",
-            labels={"investment_score": "Investment Score", "age": "Age"},
+            title="Investment Score vs Satisfaction (segment-defining axes)",
+            labels={"investment_score": "Investment Score", "satisfaction_score": "Satisfaction"},
         )
         fig_sc.update_layout(height=380)
         st.plotly_chart(fig_sc, use_container_width=True)
@@ -374,60 +420,142 @@ with tab3:
 
 # ── TAB 4 · Segment Insights ─────────────────
 
+# Per-segment recommendation copy used in the deep-dive mode
+SEGMENT_RECOMMENDATIONS = {
+    "First-Time Buyers": "Focus on education and hand-holding — satisfaction is the lowest of all segments (1.74/5). Highlight financing options, walkthroughs, and post-purchase support. Website channel is dominant so invest in onboarding flows there.",
+    "Corporate Buyers":  "High satisfaction (4.24/5) and Apartment-only. Maintain service quality and offer portfolio / multi-unit packages. They're a stable revenue base — prioritise retention and referrals.",
+    "Global Investors":  "Office-only segment with mid-tier investment scores. Target with international-investor content, tax/regulatory guides, and remote-purchase tooling. Loan rate and investment% are average so upsell on premium services.",
+    "Luxury Investors":   "Highest price (~$486k) and largest floor area (1,599 sqft). Premium portfolio buyers with no loan dependency. Lead with exclusive listings, white-glove service, and off-market opportunities.",
+}
+
+def _render_segment_comparison(seg, seg_df, color, total):
+    """Compact 6-KPI + 3-chart card used in the 'All' comparison view."""
+    st.markdown(f"""
+    <div class="segment-card" style="border-left-color:{color}">
+    <h4 style="color:{color}">{seg} &nbsp;·&nbsp; {len(seg_df):,} buyers ({len(seg_df)/total*100:.1f}%)</h4>
+    </div>
+    """, unsafe_allow_html=True)
+
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Avg Price",        f"${seg_df['sale_price'].mean():,.0f}")
+    m2.metric("Avg Floor Area",   f"{seg_df['floor_area_sqft'].mean():,.0f} sqft")
+    m3.metric("Avg Age",          f"{seg_df['age'].mean():.1f} yrs")
+    m4.metric("Avg Satisfaction", f"{seg_df['satisfaction_score'].mean():.2f}/5")
+    m5.metric("Loan Rate",        f"{(seg_df['loan_applied']=='Yes').mean()*100:.1f}%")
+    m6.metric("Investment %",     f"{(seg_df['acquisition_purpose']=='Investment').mean()*100:.1f}%")
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        rc = seg_df["referral_channel"].value_counts().reset_index()
+        rc.columns = ["Channel", "Count"]
+        fig_rc = px.pie(rc, names="Channel", values="Count",
+                        title="Referral Channel", hole=0.4,
+                        color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig_rc.update_layout(height=280, margin=dict(t=40, b=0, l=0, r=0))
+        st.plotly_chart(fig_rc, use_container_width=True)
+
+    with c2:
+        pu = seg_df["acquisition_purpose"].value_counts().reset_index()
+        pu.columns = ["Purpose", "Count"]
+        fig_pu = px.pie(pu, names="Purpose", values="Count",
+                        title="Acquisition Purpose", hole=0.4,
+                        color_discrete_sequence=["#3498db","#e74c3c"])
+        fig_pu.update_layout(height=280, margin=dict(t=40, b=0, l=0, r=0))
+        st.plotly_chart(fig_pu, use_container_width=True)
+
+    with c3:
+        co = seg_df["country"].value_counts().head(5).reset_index()
+        co.columns = ["Country", "Count"]
+        fig_co = px.bar(co, x="Country", y="Count",
+                        title="Top 5 Countries",
+                        color_discrete_sequence=[color])
+        fig_co.update_layout(height=280, margin=dict(t=40, b=0, l=0, r=0),
+                             showlegend=False)
+        st.plotly_chart(fig_co, use_container_width=True)
+
+    st.markdown("---")
+
+def _render_segment_deep_dive(seg, seg_df, color, total):
+    """Single-segment view: larger header, 6 KPIs, 2×2 chart grid, recommendation."""
+    st.markdown(f"""
+    <div class="segment-card" style="border-left-color:{color}; padding:18px;">
+        <h3 style="color:{color}; margin:0;">{seg}</h3>
+        <div style="color:#9ca3af; margin-top:4px;">
+            {len(seg_df):,} buyers &nbsp;·&nbsp; {len(seg_df)/total*100:.1f}% of filtered set
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 6 KPI strip
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Avg Price",        f"${seg_df['sale_price'].mean():,.0f}")
+    m2.metric("Avg Floor Area",   f"{seg_df['floor_area_sqft'].mean():,.0f} sqft")
+    m3.metric("Avg Age",          f"{seg_df['age'].mean():.1f} yrs")
+    m4.metric("Avg Satisfaction", f"{seg_df['satisfaction_score'].mean():.2f}/5")
+    m5.metric("Loan Rate",        f"{(seg_df['loan_applied']=='Yes').mean()*100:.1f}%")
+    m6.metric("Investment %",     f"{(seg_df['acquisition_purpose']=='Investment').mean()*100:.1f}%")
+
+    # 2x2 chart grid
+    r1c1, r1c2 = st.columns(2)
+    with r1c1:
+        rc = seg_df["referral_channel"].value_counts().reset_index()
+        rc.columns = ["Channel", "Count"]
+        fig_rc = px.pie(rc, names="Channel", values="Count",
+                        title="Referral Channel", hole=0.4,
+                        color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig_rc.update_layout(height=320, margin=dict(t=40, b=0, l=0, r=0))
+        st.plotly_chart(fig_rc, use_container_width=True)
+
+    with r1c2:
+        pu = seg_df["acquisition_purpose"].value_counts().reset_index()
+        pu.columns = ["Purpose", "Count"]
+        fig_pu = px.pie(pu, names="Purpose", values="Count",
+                        title="Acquisition Purpose", hole=0.4,
+                        color_discrete_sequence=["#3498db","#e74c3c"])
+        fig_pu.update_layout(height=320, margin=dict(t=40, b=0, l=0, r=0))
+        st.plotly_chart(fig_pu, use_container_width=True)
+
+    r2c1, r2c2 = st.columns(2)
+    with r2c1:
+        co = seg_df["country"].value_counts().head(8).reset_index()
+        co.columns = ["Country", "Count"]
+        fig_co = px.bar(co, x="Country", y="Count",
+                        title="Top Countries",
+                        color_discrete_sequence=[color])
+        fig_co.update_layout(height=320, margin=dict(t=40, b=0, l=0, r=0),
+                             showlegend=False)
+        st.plotly_chart(fig_co, use_container_width=True)
+
+    with r2c2:
+        fig_age = px.histogram(seg_df, x="age", nbins=20,
+                               title="Age Distribution",
+                               color_discrete_sequence=[color])
+        fig_age.update_layout(height=320, margin=dict(t=40, b=0, l=0, r=0),
+                              showlegend=False, yaxis_title="Buyers")
+        st.plotly_chart(fig_age, use_container_width=True)
+
+    # Recommendation
+    st.markdown("#### 🎯 Recommended Action")
+    st.info(SEGMENT_RECOMMENDATIONS.get(seg, "No specific recommendation available for this segment."))
+
+
 with tab4:
     st.subheader("Segment Insights Panel — Descriptive Statistics per Cluster")
 
     segments_present = [s for s in SEGMENT_ORDER if s in filtered_df["Buyer_Segment"].unique()]
+    total = len(filtered_df) if len(filtered_df) > 0 else 1
 
-    for seg in segments_present:
+    if len(segments_present) == 1:
+        seg = segments_present[0]
         seg_df = filtered_df[filtered_df["Buyer_Segment"] == seg]
         color  = SEGMENT_COLORS[seg]
-
-        st.markdown(f"""
-        <div class="segment-card" style="border-left-color:{color}">
-        <h4 style="color:{color}">{seg} &nbsp;·&nbsp; {len(seg_df):,} buyers ({len(seg_df)/len(filtered_df)*100:.1f}%)</h4>
-        </div>
-        """, unsafe_allow_html=True)
-
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
-        m1.metric("Avg Price",       f"${seg_df['sale_price'].mean():,.0f}")
-        m2.metric("Avg Floor Area",  f"{seg_df['floor_area_sqft'].mean():,.0f} sqft")
-        m3.metric("Avg Age",         f"{seg_df['age'].mean():.1f} yrs")
-        m4.metric("Avg Satisfaction",f"{seg_df['satisfaction_score'].mean():.2f}/5")
-        m5.metric("Loan Rate",       f"{(seg_df['loan_applied']=='Yes').mean()*100:.1f}%")
-        m6.metric("Investment %",    f"{(seg_df['acquisition_purpose']=='Investment').mean()*100:.1f}%")
-
-        c1, c2, c3 = st.columns(3)
-
-        with c1:
-            rc = seg_df["referral_channel"].value_counts().reset_index()
-            rc.columns = ["Channel", "Count"]
-            fig_rc = px.pie(rc, names="Channel", values="Count",
-                            title="Referral Channel", hole=0.4,
-                            color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_rc.update_layout(height=280, margin=dict(t=40, b=0, l=0, r=0))
-            st.plotly_chart(fig_rc, use_container_width=True)
-
-        with c2:
-            pu = seg_df["acquisition_purpose"].value_counts().reset_index()
-            pu.columns = ["Purpose", "Count"]
-            fig_pu = px.pie(pu, names="Purpose", values="Count",
-                            title="Acquisition Purpose", hole=0.4,
-                            color_discrete_sequence=["#3498db","#e74c3c"])
-            fig_pu.update_layout(height=280, margin=dict(t=40, b=0, l=0, r=0))
-            st.plotly_chart(fig_pu, use_container_width=True)
-
-        with c3:
-            co = seg_df["country"].value_counts().head(5).reset_index()
-            co.columns = ["Country", "Count"]
-            fig_co = px.bar(co, x="Country", y="Count",
-                            title="Top 5 Countries",
-                            color_discrete_sequence=[color])
-            fig_co.update_layout(height=280, margin=dict(t=40, b=0, l=0, r=0),
-                                 showlegend=False)
-            st.plotly_chart(fig_co, use_container_width=True)
-
-        st.markdown("---")
+        _render_segment_deep_dive(seg, seg_df, color, total)
+    else:
+        for seg in segments_present:
+            seg_df = filtered_df[filtered_df["Buyer_Segment"] == seg]
+            color  = SEGMENT_COLORS[seg]
+            _render_segment_comparison(seg, seg_df, color, total)
 
 # ── TAB 5 · Predict Buyer ────────────────────
 
@@ -439,12 +567,15 @@ with tab5:
     t1, t2, t3 = st.columns(3)
     with t1:
         input_age = st.number_input("Age", min_value=18, max_value=100, value=35,
+                                    key="pred_age",
                                     help="Buyer's age. E.g. 25, 35, 50")
     with t2:
         input_satisfaction = st.slider("Satisfaction Score", min_value=1, max_value=5, value=3,
+                                       key="pred_satisfaction",
                                        help="1 = Very Low · 3 = Neutral · 5 = Excellent")
     with t3:
         input_loan = st.selectbox("Loan Applied", ["Yes", "No"],
+                                   key="pred_loan",
                                    help="Whether the buyer applied for financing")
 
     st.markdown("#### 🏠 Property Details")
@@ -452,23 +583,36 @@ with tab5:
     with t4:
         input_sale_price = st.number_input(
             "Property Price ($)", min_value=50000, value=300000, step=1000, format="%d",
-            help="Purchase value in USD"
+            key="pred_price",
+            help="Purchase value in USD",
         )
         st.caption(f"💰 {input_sale_price:,}")
     with t5:
         input_floor_area = st.number_input(
             "Floor Area (sqft)", min_value=400, value=1000, step=50,
-            help="Typical range: 400–2000 sqft"
+            key="pred_area",
+            help="Typical range: 400–2000 sqft",
         )
     with t6:
         input_unit_type = st.selectbox(
             "Unit Type", ["Apartment", "Office"],
-            help="Apartment = residential · Office = commercial"
+            key="pred_unit",
+            help="Apartment = residential · Office = commercial",
         )
 
     st.markdown("---")
 
-    if st.button("🔍 Predict Segment", use_container_width=True):
+    btn_col, reset_col = st.columns([4, 1])
+    with btn_col:
+        predict_clicked = st.button("🔍 Predict Segment", use_container_width=True)
+    with reset_col:
+        if st.button("↺ Reset", use_container_width=True, help="Reset all buyer inputs to defaults"):
+            for k in ("pred_age", "pred_satisfaction", "pred_loan",
+                      "pred_price", "pred_area", "pred_unit"):
+                st.session_state.pop(k, None)
+            st.rerun()
+
+    if predict_clicked:
         with st.spinner("Analysing buyer profile..."):
 
             price_per_sqft   = input_sale_price / input_floor_area if input_floor_area > 0 else 0
@@ -510,8 +654,10 @@ with tab5:
         r2.metric("Investment Score",  f"{investment_score:.1f}")
         r3.metric("Unit Type",         input_unit_type)
 
-        # Show how close the buyer is to each segment mean
-        st.markdown("**Distance to each segment centroid (lower = closer match):**")
+        # Show how strongly the buyer's profile matches each segment centroid.
+        # Convert raw scaled euclidean distance into softmax match-likelihood (%)
+        # so the bars sum to 100 — the closest segment reads as the dominant match.
+        st.markdown("**Match likelihood for each segment (higher = stronger match, sums to 100%):**")
         seg_means = df.groupby("Buyer_Segment")[[
             "sale_price", "floor_area_sqft", "price_per_sqft",
             "investment_score", "loan_indicator", "satisfaction_score",
@@ -529,65 +675,26 @@ with tab5:
         for i, seg in enumerate(seg_means.index):
             distances[seg] = float(np.linalg.norm(input_scaled - scaler_means[i]))
 
-        dist_df = pd.DataFrame.from_dict(distances, orient="index", columns=["Distance"])
-        dist_df = dist_df.sort_values("Distance")
+        dist_series = pd.Series(distances).sort_values()
+        # Softmax with negative distances: exp(-d) — smaller d → larger share
+        likelihood = np.exp(-dist_series.values)
+        likelihood = 100 * likelihood / likelihood.sum()
+        match_df = pd.DataFrame({
+            "Segment": dist_series.index,
+            "Match %": np.round(likelihood, 1),
+        })
 
         fig_dist = px.bar(
-            dist_df.reset_index(), x="index", y="Distance",
-            color="index", color_discrete_map=SEGMENT_COLORS,
-            title="Euclidean Distance to Segment Centroid",
-            labels={"index": "Segment"},
+            match_df, x="Segment", y="Match %",
+            color="Segment", color_discrete_map=SEGMENT_COLORS,
+            title="Match Likelihood by Segment (sums to 100%)",
+            text="Match %",
         )
-        fig_dist.update_layout(showlegend=False, height=300)
+        fig_dist.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+        fig_dist.update_layout(showlegend=False, height=300, yaxis_ticksuffix="%")
         st.plotly_chart(fig_dist, use_container_width=True)
 
         st.info("Prediction generated using KMeans clustering model trained on 8 features.")
-
-# ─────────────────────────────────────────────
-# BUYER PERSONAS REFERENCE
-# ─────────────────────────────────────────────
-
-st.markdown("---")
-st.subheader("📋 Buyer Persona Reference")
-
-p1, p2, p3, p4 = st.columns(4)
-
-with p1:
-    st.info(
-        "🏠 **First-Time Buyers**\n\n"
-        "• Lower property value\n"
-        "• Younger buyers\n"
-        "• High loan dependency\n"
-        "• Low satisfaction — needs support\n"
-        "• Home purchase focused"
-    )
-with p2:
-    st.info(
-        "🏢 **Corporate Buyers**\n\n"
-        "• Mid-range properties\n"
-        "• High satisfaction score\n"
-        "• Companies buying multiple units\n"
-        "• Mixed Home/Investment purpose\n"
-        "• Agency channel effective"
-    )
-with p3:
-    st.info(
-        "🌍 **Global Investors**\n\n"
-        "• Upper mid-range properties\n"
-        "• International buyers\n"
-        "• Investment focused\n"
-        "• Diverse geographic origin\n"
-        "• Low loan dependency"
-    )
-with p4:
-    st.info(
-        "💎 **Luxury Investors**\n\n"
-        "• Highest property value\n"
-        "• Large floor areas\n"
-        "• High investment score\n"
-        "• No loan dependency\n"
-        "• Premium portfolio buyers"
-    )
 
 # ─────────────────────────────────────────────
 # EXPORT
