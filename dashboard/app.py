@@ -79,7 +79,7 @@ st.caption("Machine Learning Based Buyer Segmentation & Investment Profiling —
 st.markdown("---")
 
 # ─────────────────────────────────────────────
-# SIDEBAR — FILTERS  (PRD: country, region, acquisition_purpose, client_type)
+# SIDEBAR — FILTERS
 # ─────────────────────────────────────────────
 
 st.sidebar.markdown("# 🎛 Dashboard Controls")
@@ -94,12 +94,6 @@ country_options = sorted(df["country"].dropna().unique().tolist())
 selected_country = st.sidebar.selectbox(
     "Country",
     ["All"] + country_options,
-)
-
-region_options = sorted(df["region"].dropna().unique().tolist())
-selected_region = st.sidebar.selectbox(
-    "Region",
-    ["All"] + region_options,
 )
 
 purpose_options = sorted(df["acquisition_purpose"].dropna().unique().tolist())
@@ -127,33 +121,39 @@ if selected_segment    != "All":
     filtered_df = filtered_df[filtered_df["Buyer_Segment"]        == selected_segment]
 if selected_country    != "All":
     filtered_df = filtered_df[filtered_df["country"]               == selected_country]
-if selected_region     != "All":
-    filtered_df = filtered_df[filtered_df["region"]                == selected_region]
 if selected_purpose    != "All":
     filtered_df = filtered_df[filtered_df["acquisition_purpose"]   == selected_purpose]
 if selected_client_type != "All":
     filtered_df = filtered_df[filtered_df["client_type"]           == selected_client_type]
 
+_filter_is_empty = False
 if filtered_df.empty:
     st.warning("⚠️ No data matches the current filters. Please adjust your selections.")
+    st.download_button(
+        label="Download Full Dataset (un-filtered) as CSV",
+        data=df.to_csv(index=False),
+        file_name="buyer_segments_full.csv",
+        mime="text/csv",
+    )
     st.stop()
 
 # ─────────────────────────────────────────────
-# KPI CARDS
+# KPI CARDS  (skipped when filters are empty — they would show misleading "all" numbers)
 # ─────────────────────────────────────────────
 
-kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+if not _filter_is_empty:
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
 
-with kpi1:
-    st.metric("👥 Total Buyers", f"{len(filtered_df):,}")
-with kpi2:
-    st.metric("📈 Average Age", f"{filtered_df['age'].mean():.1f} yrs")
-with kpi3:
-    st.metric("🏠 Avg Sale Price", f"${filtered_df['sale_price'].mean():,.0f}")
-with kpi4:
-    st.metric("💡 Avg Invest. Score", f"{filtered_df['investment_score'].mean():.1f}")
-with kpi5:
-    st.metric("⭐ Avg Satisfaction", f"{filtered_df['satisfaction_score'].mean():.2f}/5")
+    with kpi1:
+        st.metric("👥 Total Buyers", f"{len(filtered_df):,}")
+    with kpi2:
+        st.metric("📈 Average Age", f"{filtered_df['age'].mean():.1f} yrs")
+    with kpi3:
+        st.metric("🏠 Avg Sale Price", f"${filtered_df['sale_price'].mean():,.0f}")
+    with kpi4:
+        st.metric("💡 Avg Invest. Score", f"{filtered_df['investment_score'].mean():.1f}")
+    with kpi5:
+        st.metric("⭐ Avg Satisfaction", f"{filtered_df['satisfaction_score'].mean():.2f}/5")
 
 st.markdown("---")
 
@@ -168,8 +168,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔍 Segment Insights",
     "🤖 Predict Buyer",
 ])
-
-# ── TAB 1 · Overview ─────────────────────────
 
 with tab1:
     st.subheader("Buyer Segmentation Overview")
@@ -201,10 +199,11 @@ with tab1:
             st.plotly_chart(fig_pie, use_container_width=True)
 
     with col2:
-        # Segment count bar
+        # Segment count bar — always show all 4 segments for context,
+        # independent of which segment the user has selected in the sidebar
         seg_counts = (
-            filtered_df["Buyer_Segment"].value_counts()
-            .reindex([s for s in SEGMENT_ORDER if s in filtered_df["Buyer_Segment"].unique()])
+            df["Buyer_Segment"].value_counts()
+            .reindex(SEGMENT_ORDER)
             .reset_index()
         )
         seg_counts.columns = ["Segment", "Count"]
@@ -373,18 +372,6 @@ with tab3:
     fig_heat.update_layout(height=420)
     st.plotly_chart(fig_heat, use_container_width=True)
 
-    # Top 15 regions
-    top_regions = filtered_df["region"].value_counts().head(15).reset_index()
-    top_regions.columns = ["Region", "Count"]
-    fig_reg = px.bar(
-        top_regions, x="Count", y="Region",
-        orientation="h",
-        color="Count", color_continuous_scale="Teal",
-        title="Top 15 Regions by Buyer Count",
-    )
-    fig_reg.update_layout(height=500, coloraxis_showscale=False)
-    st.plotly_chart(fig_reg, use_container_width=True)
-
 # ── TAB 4 · Segment Insights ─────────────────
 
 with tab4:
@@ -484,7 +471,7 @@ with tab5:
     if st.button("🔍 Predict Segment", use_container_width=True):
         with st.spinner("Analysing buyer profile..."):
 
-            price_per_sqft   = input_sale_price / input_floor_area
+            price_per_sqft   = input_sale_price / input_floor_area if input_floor_area > 0 else 0
             investment_score = (0.7 * (input_sale_price / df['sale_price'].max()) + 0.3 * (input_satisfaction / 5)) * 10
 
             input_data = pd.DataFrame([{
@@ -498,10 +485,18 @@ with tab5:
                 'unit_type_encoded' : 0 if input_unit_type == "Apartment" else 1,
             }])
 
-            input_data     = input_data[scaler.feature_names_in_]
+            if hasattr(scaler, 'feature_names_in_'):
+                input_data = input_data[scaler.feature_names_in_]
             cluster_id     = int(model.predict(scaler.transform(input_data))[0])
-            predicted_seg  = CLUSTER_NAMES[cluster_id]
+            predicted_seg  = CLUSTER_NAMES.get(cluster_id) or CLUSTER_NAMES.get(str(cluster_id), "Unknown")
             seg_color      = SEGMENT_COLORS.get(predicted_seg, "#888")
+
+            if predicted_seg == "Unknown":
+                st.warning(
+                    f"Model returned cluster id {cluster_id}, which is not in "
+                    f"models/cluster_mapping.pkl. Re-run notebook 03_clustering.ipynb "
+                    f"to refresh the saved models."
+                )
 
         st.markdown(f"""
         <div class="segment-card" style="border-left-color:{seg_color}; padding:20px;">
@@ -523,7 +518,11 @@ with tab5:
             "age", "unit_type_encoded"
         ]].mean()
 
-        scaler_means = scaler.transform(seg_means.reindex(columns=scaler.feature_names_in_))
+        if hasattr(scaler, 'feature_names_in_'):
+            seg_means_aligned = seg_means.reindex(columns=scaler.feature_names_in_)
+        else:
+            seg_means_aligned = seg_means
+        scaler_means = scaler.transform(seg_means_aligned)
         input_scaled = scaler.transform(input_data)
 
         distances = {}

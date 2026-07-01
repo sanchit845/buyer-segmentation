@@ -1,4 +1,5 @@
 Segment,Count,Pct_Total,Avg_Sale_Price,Avg_Age,Avg_Satisfaction,Loan_Rate_Pct,Investment_Pct,Top_Country,Top_Referral
-Budget Residential Buyers,3536,48.4,247229.0,56.2,2.82,36.8,30.5,USA,Website
-Mainstream Residential Buyers,1068,14.6,368494.0,56.6,3.04,37.6,33.1,USA,Website
-Premium Investors,2701,37.0,463901.0,56.6,3.37,36.3,30.1,USA,Website
+First-Time Buyers,2026,27.7,252549.0,55.1,1.74,35.5,30.7,USA,Website
+Corporate Buyers,1981,27.1,260310.0,57.6,4.24,38.2,30.3,USA,Website
+Global Investors,1016,13.9,378891.0,56.8,3.13,37.7,32.5,USA,Website
+Luxury Investors,2282,31.2,485740.0,56.4,3.15,36.2,30.5,USA,Website

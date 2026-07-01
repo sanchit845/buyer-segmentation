@@ -109,7 +109,7 @@ BUYER-SEGMENTATION/
 - **Scaling:** StandardScaler on all 8 model features
 
 ### Step 3 — Clustering (`03_clustering.ipynb`)
-- **Elbow Method** + **Silhouette Score** + **Davies-Bouldin Score** → optimal K=3
+- **Elbow Method** + **Silhouette Score** + **Davies-Bouldin Score** → optimal K=4
 - **K-Means** (primary model, dashboard-integrated)
 - **Hierarchical Clustering** (Ward linkage, dendrogram validation)
 - **Auto-labelling:** clusters ranked by composite score (price + investment_score + price_per_sqft + floor_area + satisfaction) → no manual mapping
@@ -123,11 +123,14 @@ BUYER-SEGMENTATION/
 
 ## 👥 Buyer Segments
 
-| Segment | Profile |
-|---|---|
-| 🏠 **Budget Residential Buyers** | Lower price, smaller area, high loan dependency, Home purpose, Website channel |
-| 🏢 **Mainstream Residential Buyers** | Mid-range properties, balanced Home/Investment mix, Agency channel effective |
-| 💎 **Premium Investors** | High-value, large area, low loan rate, high satisfaction, diverse geography |
+| Segment | Count | Share | Avg Price | Avg Floor Area | Avg Age | Avg Satisfaction | Loan Rate | Investment % | Dominant Unit |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 🏠 **First-Time Buyers** | 2,026 | 27.7% | $252,549 | 855 sqft | 55.1 | 1.74 / 5 | 35.5% | 30.7% | Apartment (97%) |
+| 🏢 **Corporate Buyers** | 1,981 | 27.1% | $260,310 | 875 sqft | 57.6 | 4.24 / 5 | 38.2% | 30.3% | Apartment (100%) |
+| 🌍 **Global Investors** | 1,016 | 13.9% | $378,891 | 1,201 sqft | 56.8 | 3.13 / 5 | 37.7% | 32.5% | Office (100%) |
+| 💎 **Luxury Investors** | 2,282 | 31.2% | $485,740 | 1,599 sqft | 56.4 | 3.15 / 5 | 36.2% | 30.5% | Apartment (100%) |
+
+Numbers sourced from `data/processed/cluster_summary.csv` (computed in `04_business_insights.ipynb`).
 
 ---
 
@@ -202,7 +205,7 @@ Open your browser at **http://localhost:8501**
 | 🔍 Segment Insights | Per-cluster KPIs, referral/purpose/country breakdowns |
 | 🤖 Predict Buyer | Input buyer details → predicted segment + centroid distance chart |
 
-**Filters:** Country · Region · Acquisition Purpose · Client Type · Buyer Segment
+**Filters:** Country · Acquisition Purpose · Client Type · Buyer Segment
 
 ---
 

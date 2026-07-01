@@ -44,8 +44,6 @@ def check_data_files():
         "models/clustering_model.pkl",
         "models/scaler.pkl",
         "models/cluster_mapping.pkl",
-        "models/encoders.pkl",
-        "models/feature_columns.pkl",
     ]
     missing = [f for f in required_files if not os.path.exists(f)]
 
@@ -72,10 +70,13 @@ def launch_dashboard():
     print("\n Starting Real Estate Buyer Intelligence Dashboard...")
     print(" Open your browser at: http://localhost:8501\n")
 
-    subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", dashboard_path],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "streamlit", "run", dashboard_path],
+            check=True,
+        )
+    except KeyboardInterrupt:
+        print("\nDashboard stopped.")
 
 
 if __name__ == "__main__":
