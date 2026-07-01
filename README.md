@@ -1,214 +1,119 @@
 # 🏠 Buyer Segmentation & Investment Profiling
-### Machine Learning Based Real Estate Market Intelligence
-**Collaborating Organizations:** Unified Mentor × Parcl Co. Limited
+
+An unsupervised ML project that clusters 2,000 real-estate buyers into 4 segments using K-Means on engineered transaction features, and exposes the result as an interactive Streamlit dashboard.
+
+Built as an internship project with **Unified Mentor** × **Parcl Co. Limited**.
 
 ---
 
-## 📌 Problem Statement
+## What it does
 
-Parcl currently lacks a data-driven understanding of different types of property buyers, their investment motivations, geographic differences in behaviour, and financing patterns. Without segmentation, all buyers are treated the same — leading to inefficient marketing, generic recommendations, and missed investment opportunities.
+Takes 2,000 simulated clients and 10,000 simulated property transactions, merges them on `client_id`, engineers 8 features, runs K-Means + Hierarchical clustering, and ships a 5-tab dashboard (Overview, Investor Insights, Geographic, Segment Insights, Predict) plus a buyer-profile prediction form.
 
-This project uses unsupervised machine learning (K-Means + Hierarchical Clustering) to discover hidden buyer segments and build an interactive intelligence dashboard.
+The 4 segments the model converges on:
 
----
+| Segment | Profile |
+|---|---|
+| 🏠 First-Time Buyers | ~$252k, low satisfaction (1.7/5), high loan dependency |
+| 🏢 Corporate Buyers | ~$260k, very high satisfaction (4.2/5), Apartment-only |
+| 🌍 Global Investors | ~$379k, mid satisfaction, **Office-only** (100% commercial) |
+| 💎 Luxury Investors | ~$486k, 1,599 sqft avg, highest investment score, no loan needed |
 
-## 🎯 Objectives
-
-- Clean and merge client and property transaction data
-- Engineer meaningful features from raw buyer and property attributes
-- Encode and scale features for ML readiness
-- Apply K-Means and Hierarchical Clustering to identify buyer segments
-- Interpret and label clusters with business-meaningful names
-- Build a Streamlit dashboard for interactive exploration and prediction
+Full per-segment numbers are in `data/processed/cluster_summary.csv`.
 
 ---
 
-## 🗂️ Project Structure
+## Project layout
 
 ```
-BUYER-SEGMENTATION/
-│
-├── dashboard/
-│   └── app.py                        # Streamlit web application
-│
-├── data/
-│   ├── raw/
-│   │   ├── clients.csv               # Raw client demographic data
-│   │   └── properties.csv            # Raw property transaction data
-│   └── processed/
-│       ├── cleaned_dataset.csv       # Output of 01_eda.ipynb
-│       ├── features_dataset.csv      # Output of 02_preprocessing.ipynb
-│       ├── final_segmented_dataset.csv  # Output of 03_clustering.ipynb
-│       ├── cluster_summary.csv       # Cluster stats for research paper
-│       └── segment_insights.csv     # Business insights per segment
-│
-├── models/
-│   ├── clustering_model.pkl          # Trained KMeans model
-│   ├── scaler.pkl                    # Fitted StandardScaler
-│   ├── cluster_mapping.pkl           # Auto-generated segment name map
-│   ├── encoders.pkl                  # Label + OHE encoders
-│   └── feature_columns.pkl          # Model feature name list
-│
+buyer-segmentation/
+├── dashboard/app.py              # Streamlit app (entry point)
+├── data/raw/                     # clients.csv + properties.csv
+├── data/processed/               # Outputs of each notebook
+├── models/                       # Saved KMeans, scaler, cluster_mapping
 ├── notebooks/
-│   ├── 01_eda.ipynb                  # Exploratory Data Analysis
-│   ├── 02_preprocessing.ipynb        # Feature Engineering & Encoding
-│   ├── 03_clustering.ipynb           # K-Means + Hierarchical Clustering
-│   └── 04_business_insights.ipynb   # Segment Profiling & Recommendations
-│
-├── reports/                          # Research paper and exports
-├── main.py                           # Project entry point
-├── requirements.txt                  # Python dependencies
-└── README.md
+│   ├── 01_eda.ipynb              # Clean + merge
+│   ├── 02_preprocessing.ipynb    # Feature engineering + encoding
+│   ├── 03_clustering.ipynb       # K-Means + Hierarchical + auto-labelling
+│   └── 04_business_insights.ipynb  # Segment profiling + recommendations
+├── main.py                       # Alternative launcher (optional)
+└── requirements.txt
 ```
 
----
-
-## 📊 Dataset
-
-### `clients.csv` — 2,000 records, 12 fields
-| Field | Description |
-|---|---|
-| `client_id` | Unique client identifier |
-| `client_type` | Individual / Company |
-| `first_name`, `last_name` | Client name |
-| `date_of_birth` | Used to compute age |
-| `gender` | M / F |
-| `country` | Country of residence (10 countries) |
-| `region` | Geographic region (57 regions) |
-| `acquisition_purpose` | Home / Investment |
-| `satisfaction_score` | 1–5 rating |
-| `loan_applied` | Yes / No |
-| `referral_channel` | Website / Agency / Client |
-
-### `properties.csv` — 10,000 records, 9 fields
-| Field | Description |
-|---|---|
-| `listing_id` | Property listing ID |
-| `unit_category` | Apartment / Office |
-| `floor_area_sqft` | Property size in sq ft |
-| `sale_price` | Transaction price (USD) |
-| `transaction_date` | Date of transaction |
-| `listing_status` | Sold / Available |
-| `client_ref` | Links to `client_id` |
+The four notebooks are meant to be run in order — each writes the CSVs / PKL files the next one consumes, and the dashboard needs the final outputs of `03_clustering.ipynb`.
 
 ---
 
-## 🧠 ML Methodology
+## How to run it
 
-### Step 1 — Data Cleaning (`01_eda.ipynb`)
-- Remove duplicates from both datasets
-- Parse mixed-format dates, clean `sale_price` currency strings
-- Drop unlinked properties (`client_ref` null)
-- Merge clients + properties on `client_id`
-- Compute `age` from `date_of_birth`
-
-### Step 2 — Feature Engineering & Encoding (`02_preprocessing.ipynb`)
-- **Engineered:** `price_per_sqft`, `investment_score`, `loan_indicator`, `unit_type_encoded`
-- **Label Encoding:** `client_type`, `gender`, `acquisition_purpose`
-- **One-Hot Encoding:** `referral_channel`, `country`, `region`
-- **Scaling:** StandardScaler on all 8 model features
-
-### Step 3 — Clustering (`03_clustering.ipynb`)
-- **Elbow Method** + **Silhouette Score** + **Davies-Bouldin Score** → optimal K=4
-- **K-Means** (primary model, dashboard-integrated)
-- **Hierarchical Clustering** (Ward linkage, dendrogram validation)
-- **Auto-labelling:** clusters ranked by composite score (price + investment_score + price_per_sqft + floor_area + satisfaction) → no manual mapping
-
-### Step 4 — Business Insights (`04_business_insights.ipynb`)
-- Radar chart comparison across segments
-- Geographic, financing, referral, and satisfaction analysis
-- Actionable recommendations per segment
-
----
-
-## 👥 Buyer Segments
-
-| Segment | Count | Share | Avg Price | Avg Floor Area | Avg Age | Avg Satisfaction | Loan Rate | Investment % | Dominant Unit |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 🏠 **First-Time Buyers** | 2,026 | 27.7% | $252,549 | 855 sqft | 55.1 | 1.74 / 5 | 35.5% | 30.7% | Apartment (97%) |
-| 🏢 **Corporate Buyers** | 1,981 | 27.1% | $260,310 | 875 sqft | 57.6 | 4.24 / 5 | 38.2% | 30.3% | Apartment (100%) |
-| 🌍 **Global Investors** | 1,016 | 13.9% | $378,891 | 1,201 sqft | 56.8 | 3.13 / 5 | 37.7% | 32.5% | Office (100%) |
-| 💎 **Luxury Investors** | 2,282 | 31.2% | $485,740 | 1,599 sqft | 56.4 | 3.15 / 5 | 36.2% | 30.5% | Apartment (100%) |
-
-Numbers sourced from `data/processed/cluster_summary.csv` (computed in `04_business_insights.ipynb`).
-
----
-
-## 🚀 Setup & Run
-
-### 1. Clone the repository
 ```bash
 git clone <repo-url>
-cd BUYER-SEGMENTATION
-```
-
-### 2. Create a virtual environment
-```bash
+cd buyer-segmentation
 python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# Mac/Linux
-source venv/bin/activate
-```
-
-### 3. Install dependencies
-```bash
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # macOS / Linux
 pip install -r requirements.txt
 ```
 
-### 4. Run the notebooks in order
-Open Jupyter and run each notebook sequentially:
-```
-notebooks/01_eda.ipynb
-notebooks/02_preprocessing.ipynb
-notebooks/03_clustering.ipynb
-notebooks/04_business_insights.ipynb
-```
-This generates all processed CSVs and model PKL files.
+Then either run the notebooks in order (`jupyter notebook`) to regenerate everything from scratch, or skip straight to the dashboard if the processed data and models are already in the repo:
 
-### 5. Launch the dashboard
 ```bash
-python main.py
+cd dashboard
+streamlit run app.py
+# → opens http://localhost:8501
 ```
-Or directly:
-```bash
-streamlit run dashboard/app.py
+
+## Method (the short version)
+
+1. **Clean & merge** — drop duplicates, parse `sale_price` currency strings, drop properties with no linked client, compute `age` from `date_of_birth`. Merged frame: ~7,300 rows.
+2. **Engineer features** — `price_per_sqft`, `investment_score` (weighted price + satisfaction), `loan_indicator` (0/1), `unit_type_encoded` (0/1). Label-encode the categoricals, standard-scale all 8 model features.
+3. **Cluster** — sweep K from 2 to 8 with Elbow + Silhouette + Davies-Bouldin. Silhouette plateaus across K=3, 4, 5 (all within ~0.03). I went with **K=4** because it gave the cleanest business personas — K=3 had a vague "middle" segment, K=5 was splitting Corporate Buyers arbitrarily. Hierarchical (Ward linkage) on a sample confirms the same 4-cluster structure.
+4. **Auto-label** — rank clusters by a composite of (price, investment_score, floor_area, satisfaction) → names like "Luxury Investors" come from the rank, not manual choice.
+
+The interesting notebook is `03_clustering.ipynb` — that's where the silhouette comparison and the auto-labeller live.
+
+---
+
+## Dashboard
+
+5 tabs, all interactive, with sidebar filters (segment / country / purpose / client type):
+
+- **Overview** — segment pie + counts, purpose/client-type breakdowns
+- **Investor Insights** — price-by-segment box, investment-score scatter, loan rates, referral mix
+- **Geographic** — buyer counts and avg price by country, country×segment heatmap
+- **Segment Insights** — per-segment KPIs and pies; switches to a deep-dive view when you select one segment
+- **Predict** — type in a buyer's age, satisfaction, loan, price, area, unit type → predicted segment + match-likelihood bar across all 4
+
+---
+
+## Dependencies
+
 ```
-Open your browser at **http://localhost:8501**
+pandas, numpy, scikit-learn, scipy
+matplotlib, seaborn, plotly
+streamlit, joblib
+jupyter, ipykernel
+```
+
+Everything in `requirements.txt`. No unusual system deps.
 
 ---
 
-## 📦 Dependencies
+## Known limitations
 
-| Package | Purpose |
-|---|---|
-| `pandas`, `numpy` | Data manipulation |
-| `matplotlib`, `seaborn` | Static visualisations |
-| `scikit-learn` | KMeans, Hierarchical, Scaler, Metrics |
-| `scipy` | Dendrogram / Linkage |
-| `plotly` | Interactive dashboard charts |
-| `streamlit` | Web dashboard framework |
-| `joblib` | Model serialisation |
-| `jupyter`, `ipykernel` | Notebook execution |
+- The data is **synthetic** — `clients.csv` and `properties.csv` are simulated, not real Parcl transactions. Treat the segment counts and country distributions as illustrative.
+- **No held-out validation.** K-Means was fit on the full set; the Predict tab's "match likelihood" is a softmax over centroid distance, not a calibrated probability.
+- **Age and loan rate barely discriminate the segments** (age spread 55.1 → 57.6 yrs). The dashboard's Investor Insights scatter uses satisfaction × investment-score instead, which actually separate the clusters.
+- **K=4 was a judgement call**, not a strong signal. Re-run `03_clustering.ipynb` to see the score table — K=3 is a defensible alternative.
+
+Future work: held-out validation, DBSCAN for outlier detection, deploy the dashboard to Streamlit Community Cloud.
 
 ---
 
-## 📋 Dashboard Features
+## Notes
 
-| Tab | Content |
-|---|---|
-| 📊 Overview | Segment pie, bar charts, purpose & client type breakdown |
-| 💹 Investor Insights | Price by segment, investment score scatter, loan rates, referral channel |
-| 🌍 Geographic Analysis | Country counts, avg price by country, country×segment heatmap, top regions |
-| 🔍 Segment Insights | Per-cluster KPIs, referral/purpose/country breakdowns |
-| 🤖 Predict Buyer | Input buyer details → predicted segment + centroid distance chart |
-
-**Filters:** Country · Acquisition Purpose · Client Type · Buyer Segment
+The cleanest notebook is `02_preprocessing.ipynb` (feature engineering). The messiest is `04_business_insights.ipynb` — that one grew organically as I kept finding new things to slice, and the chart count is higher than it needs to be. I used Plotly throughout the dashboard because hover-tooltips and zoom are the actual killer feature for exploratory data work, and Matplotlib can't do them on a static export.
 
 ---
 
-## 🏢 Collaborating Organizations
-- **Unified Mentor**
-- **Parcl Co. Limited**
+*Last updated: 2026-07-02*
