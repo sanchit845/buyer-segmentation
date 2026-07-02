@@ -8,6 +8,14 @@ import plotly.express as px
 import plotly.graph_objects as go
 import joblib
 
+# Resolve paths relative to this file's location so the app works
+# whether launched from dashboard/, the repo root, or Streamlit Cloud.
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_PATH     = os.path.join(BASE_DIR, "data", "processed", "final_segmented_dataset.csv")
+MODEL_PATH    = os.path.join(BASE_DIR, "models", "clustering_model.pkl")
+SCALER_PATH   = os.path.join(BASE_DIR, "models", "scaler.pkl")
+MAPPING_PATH  = os.path.join(BASE_DIR, "models", "cluster_mapping.pkl")
+
 # ─────────────────────────────────────────────
 # PAGE CONFIG
 # ─────────────────────────────────────────────
@@ -25,13 +33,13 @@ st.set_page_config(
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("../data/processed/final_segmented_dataset.csv")
+    return pd.read_csv(DATA_PATH)
 
 @st.cache_resource
 def load_models():
-    model         = joblib.load("../models/clustering_model.pkl")
-    scaler        = joblib.load("../models/scaler.pkl")
-    cluster_names = joblib.load("../models/cluster_mapping.pkl")
+    model         = joblib.load(MODEL_PATH)
+    scaler        = joblib.load(SCALER_PATH)
+    cluster_names = joblib.load(MAPPING_PATH)
     return model, scaler, cluster_names
 
 df                        = load_data()
